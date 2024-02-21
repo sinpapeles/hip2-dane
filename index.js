@@ -1,22 +1,9 @@
 const https = require('https');
 const { DANEAgent, setServers, lookup, dns } = require('https-dane');
 
-const defaultOpts = {
-  token: 'HNS',
-  maxLength: 90,
-  validate: (key) => !!key && key.slice(0, 3) === 'hs1' && key.length <= 90, // https://wiki.trezor.io/Bech32
-};
-
-function fetchAddress(alias, opts = defaultOpts) {
-  const { token, maxLength, validate } = opts || {};
-  const agent = new DANEAgent();
+function fetchAddress(alias, token = 'HNS') {
   return new Promise((resolve, reject) => {
-    if (validate(alias)) {
-      const error = new Error('alias cannot be a valid address');
-      error.code = 'ECOLLISION';
-      return reject(error);
-    }
-
+    const agent = new DANEAgent();
     const url = `https://${alias}/.well-known/wallets/${token.toUpperCase()}`;
     const req = https.get(url, { agent, lookup }, (res) => {
       let data = '';
@@ -27,14 +14,6 @@ function fetchAddress(alias, opts = defaultOpts) {
           req.destroy();
           chunk = chunk.slice(0, newLine);
         }
-        if (data.length + chunk.length > maxLength) {
-          if (!req.destroyed) {
-            req.destroy();
-          }
-          const error = new Error('response too large');
-          error.code = 'ELARGE';
-          return reject(error);
-        }
         data += chunk;
       });
       res.on('end', () => {
@@ -44,13 +23,7 @@ function fetchAddress(alias, opts = defaultOpts) {
           return reject(error);
         }
 
-        if (validate && validate(data)) {
-          resolve(data);
-        } else {
-          const error = new Error('invalid address');
-          error.code = 'EINVALID';
-          reject(error);
-        }
+        resolve(data);
       });
     });
     req.on('error', (error) => reject(error));
